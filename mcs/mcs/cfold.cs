@@ -587,8 +587,67 @@ namespace Mono.CSharp {
 				}
 
 				return result;
-				
-			case Binary.Operator.Multiply:
+
+            case Binary.Operator.Power:
+                if (left is NullLiteral && right is NullLiteral)
+                {
+                    var lifted_int = new Nullable.NullableType(ec.BuiltinTypes.Int, loc);
+                    lifted_int.ResolveAsType(ec);
+                    return (Constant)new Binary(oper, lifted_int, right).ResolveOperator(ec);
+                }
+
+                if (!DoBinaryNumericPromotions(ec, ref left, ref right))
+                    return null;
+
+                try
+                {
+                    if (left is DoubleConstant)
+                    {
+                        double res = Math.Pow(((DoubleConstant)left).Value, ((DoubleConstant)right).Value);
+                        return new DoubleConstant(ec.BuiltinTypes, res, left.Location);
+                    }
+                    else if (left is FloatConstant)
+                    {
+                        double res = Math.Pow(((FloatConstant)left).DoubleValue, ((FloatConstant)right).DoubleValue);
+                        return new FloatConstant(ec.BuiltinTypes, res, left.Location);
+                    }
+                    else if (left is ULongConstant)
+                    {
+                        ulong res = (ulong)Math.Round(Math.Pow(((ULongConstant)left).Value, ((ULongConstant)right).Value));
+                        return new ULongConstant(ec.BuiltinTypes, res, left.Location);
+                    }
+                    else if (left is LongConstant)
+                    {
+                        long res = (long)Math.Round(Math.Pow(((LongConstant)left).Value, ((LongConstant)right).Value));
+                        return new LongConstant(ec.BuiltinTypes, res, left.Location);
+                    }
+                    else if (left is UIntConstant)
+                    {
+                        uint res = (uint)Math.Round(Math.Pow(((UIntConstant)left).Value, ((UIntConstant)right).Value));
+                        return new UIntConstant(ec.BuiltinTypes, res, left.Location);
+                    }
+                    else if (left is IntConstant)
+                    {
+                        int res = (int)Math.Round(Math.Pow(((IntConstant)left).Value, ((IntConstant)right).Value));
+                        return new IntConstant(ec.BuiltinTypes, res, left.Location);
+                    }
+                    else if (left is DecimalConstant)
+                    {
+                        decimal res = (decimal)Math.Pow((double)((DecimalConstant)left).Value, (double)((DecimalConstant)right).Value);
+                        return new DecimalConstant(ec.BuiltinTypes, res, left.Location);
+                    }
+                    else
+                    {
+                        throw new Exception("Unexpected exponentiation input: " + left);
+                    }
+                }
+                catch (OverflowException)
+                {
+                    Error_CompileTimeOverflow(ec, loc);
+                }
+                break;
+
+            case Binary.Operator.Multiply:
 				if (left is NullLiteral && right is NullLiteral) {
 					var lifted_int = new Nullable.NullableType (ec.BuiltinTypes.Int, loc);
 					lifted_int.ResolveAsType (ec);

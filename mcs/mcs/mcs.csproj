@@ -180,12 +180,11 @@
       <Visible>False</Visible>
     </Compile>
   </ItemGroup>
+  <ItemGroup>
+    <None Include="cs-parser.jay" />
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
-       Other similar extension points exist, see Microsoft.Common.targets.
-  <Target Name="BeforeBuild">
-  </Target>
-  <Target Name="AfterBuild">
-  </Target>
-  -->
+  <PropertyGroup>
+    <PreBuildEvent>"$(ProjectDir)..\jay\jay" -cvt &lt; "$(ProjectDir)..\jay\skeleton.cs" "$(ProjectDir)cs-parser.jay" &gt; "$(ProjectDir)cs-parser.cs"</PreBuildEvent>
+  </PropertyGroup>
 </Project>

@@ -2548,6 +2548,7 @@ namespace Mono.CSharp {
 			UnaryNegation,
 			
 			// Binary operators
+            Power,
 			Multiply,
 			Division,
 			Modulus,
@@ -2588,6 +2589,7 @@ namespace Mono.CSharp {
 			names [(int) OpType.Subtraction] = new string [] { "-", "op_Subtraction" };
 			names [(int) OpType.UnaryPlus] = new string [] { "+", "op_UnaryPlus" };
 			names [(int) OpType.UnaryNegation] = new string [] { "-", "op_UnaryNegation" };
+            names [(int) OpType.Power] = new string [] { "^^", "op_Power" };
 			names [(int) OpType.Multiply] = new string [] { "*", "op_Multiply" };
 			names [(int) OpType.Division] = new string [] { "/", "op_Division" };
 			names [(int) OpType.Modulus] = new string [] { "%", "op_Modulus" };

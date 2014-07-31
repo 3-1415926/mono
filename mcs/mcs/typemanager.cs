@@ -198,6 +198,7 @@ namespace Mono.CSharp
 		public readonly PredefinedType SecurityAction;
 		public readonly PredefinedType Dictionary;
 		public readonly PredefinedType Hashtable;
+        public readonly PredefinedType Math;
 		public readonly TypeSpec[] SwitchUserTypes;
 
 		//
@@ -261,6 +262,7 @@ namespace Mono.CSharp
 			SecurityAction = new PredefinedType (module, MemberKind.Enum, "System.Security.Permissions", "SecurityAction");
 			Dictionary = new PredefinedType (module, MemberKind.Class, "System.Collections.Generic", "Dictionary", 2);
 			Hashtable = new PredefinedType (module, MemberKind.Class, "System.Collections", "Hashtable");
+            Math = new PredefinedType (module, MemberKind.Class, "System", "Math");
 
 			Expression = new PredefinedType (module, MemberKind.Class, "System.Linq.Expressions", "Expression");
 			ExpressionGeneric = new PredefinedType (module, MemberKind.Class, "System.Linq.Expressions", "Expression", 1);
@@ -354,7 +356,8 @@ namespace Mono.CSharp
 		public readonly PredefinedMember<MethodSpec> AsyncStateMachineAttributeCtor;
 		public readonly PredefinedMember<MethodSpec> DebuggerBrowsableAttributeCtor;
 		public readonly PredefinedMember<MethodSpec> DecimalCtor;
-		public readonly PredefinedMember<MethodSpec> DecimalCtorInt;
+        public readonly PredefinedMember<MethodSpec> DecimalCtorDouble;
+        public readonly PredefinedMember<MethodSpec> DecimalCtorInt;
 		public readonly PredefinedMember<MethodSpec> DecimalCtorLong;
 		public readonly PredefinedMember<MethodSpec> DecimalConstantAttributeCtor;
 		public readonly PredefinedMember<MethodSpec> DefaultMemberAttributeCtor;
@@ -370,6 +373,7 @@ namespace Mono.CSharp
 		public readonly PredefinedMember<MethodSpec> InterlockedCompareExchange;
 		public readonly PredefinedMember<MethodSpec> InterlockedCompareExchange_T;
 		public readonly PredefinedMember<MethodSpec> FixedBufferAttributeCtor;
+        public readonly PredefinedMember<MethodSpec> MathPow;
 		public readonly PredefinedMember<MethodSpec> MethodInfoGetMethodFromHandle;
 		public readonly PredefinedMember<MethodSpec> MethodInfoGetMethodFromHandle2;
 		public readonly PredefinedMember<MethodSpec> MonitorEnter;
@@ -572,7 +576,10 @@ namespace Mono.CSharp
 				MemberFilter.Constructor (ParametersCompiled.CreateFullyResolved (
 					btypes.Int, btypes.Int, btypes.Int, btypes.Bool, btypes.Byte)));
 
-			DecimalCtorInt = new PredefinedMember<MethodSpec> (module, btypes.Decimal,
+            DecimalCtorDouble = new PredefinedMember<MethodSpec>(module, btypes.Decimal,
+                MemberFilter.Constructor(ParametersCompiled.CreateFullyResolved(btypes.Double)));
+
+            DecimalCtorInt = new PredefinedMember<MethodSpec>(module, btypes.Decimal,
 				MemberFilter.Constructor (ParametersCompiled.CreateFullyResolved (btypes.Int)));
 
 			DecimalCtorLong = new PredefinedMember<MethodSpec> (module, btypes.Decimal,
@@ -640,6 +647,8 @@ namespace Mono.CSharp
 								new TypeParameterSpec (0, tp, SpecialConstraint.None, Variance.None, null),
 							}, false),
 					null));
+
+            MathPow = new PredefinedMember<MethodSpec> (module, types.Math, "Pow", MemberKind.Method);
 
 			MethodInfoGetMethodFromHandle = new PredefinedMember<MethodSpec> (module, types.MethodBase,
 				"GetMethodFromHandle", MemberKind.Method, types.RuntimeMethodHandle);

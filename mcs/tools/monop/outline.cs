@@ -787,7 +787,8 @@ public class Outline {
 		case "op_False": return "false";
 		case "op_Addition": return "+";
 		case "op_Subtraction": return "-";
-		case "op_Multiply": return "*";
+        case "op_Power": return "^^";
+        case "op_Multiply": return "*";
 		case "op_Division": return "/";
 		case "op_Modulus": return "%";
 		case "op_BitwiseAnd": return "&";

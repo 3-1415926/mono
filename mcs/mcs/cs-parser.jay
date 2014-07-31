@@ -286,6 +286,7 @@ namespace Mono.CSharp
 %token OP_GT
 %token BITWISE_AND
 %token BITWISE_OR
+%token POWER
 %token STAR
 %token PERCENT
 %token DIV
@@ -304,6 +305,7 @@ namespace Mono.CSharp
 %token OP_NE
 %token OP_AND
 %token OP_OR
+%token OP_POWER_ASSIGN
 %token OP_MULT_ASSIGN
 %token OP_DIV_ASSIGN
 %token OP_MOD_ASSIGN
@@ -364,6 +366,7 @@ namespace Mono.CSharp
 %left OP_SHIFT_LEFT OP_SHIFT_RIGHT
 %left PLUS MINUS
 %left STAR DIV PERCENT
+%right POWER
 %right BANG CARRET UMINUS
 %nonassoc OP_INC OP_DEC
 %left OPEN_PARENS
@@ -2220,6 +2223,7 @@ overloadable_operator
         | PLUS { $$ = Operator.OpType.Addition; }
         | MINUS { $$ = Operator.OpType.Subtraction; }
 // Binary:
+        | POWER { $$ = Operator.OpType.Power; }
         | STAR { $$ = Operator.OpType.Multiply; }
         | DIV {  $$ = Operator.OpType.Division; }
         | PERCENT { $$ = Operator.OpType.Modulus; }
@@ -4182,19 +4186,34 @@ prefixed_unary_expression
 	  }
 	;
 
+exponentiation_expression
+    : prefixed_unary_expression
+	| prefixed_unary_expression POWER exponentiation_expression
+	  {
+	    $$ = new Binary (Binary.Operator.Power, (Expression) $1, (Expression) $3);
+		lbag.AddLocation ($$, GetLocation ($2));
+	  }
+	| prefixed_unary_expression POWER error
+	  {
+		Error_SyntaxError (yyToken);
+
+		$$ = new Binary (Binary.Operator.Power, (Expression) $1, null);
+		lbag.AddLocation ($$, GetLocation ($2));
+	  }
+
 multiplicative_expression
-	: prefixed_unary_expression
-	| multiplicative_expression STAR prefixed_unary_expression
+	: exponentiation_expression
+	| multiplicative_expression STAR exponentiation_expression
 	  {
 		$$ = new Binary (Binary.Operator.Multiply, (Expression) $1, (Expression) $3);
 		lbag.AddLocation ($$, GetLocation ($2));
 	  }
-	| multiplicative_expression DIV prefixed_unary_expression
+	| multiplicative_expression DIV exponentiation_expression
 	  {
 		$$ = new Binary (Binary.Operator.Division, (Expression) $1, (Expression) $3);
 		lbag.AddLocation ($$, GetLocation ($2));
 	  }
-	| multiplicative_expression PERCENT prefixed_unary_expression 
+	| multiplicative_expression PERCENT exponentiation_expression 
 	  {
 		$$ = new Binary (Binary.Operator.Modulus, (Expression) $1, (Expression) $3);
 		lbag.AddLocation ($$, GetLocation ($2));
@@ -4514,6 +4533,11 @@ assignment_expression
 	: prefixed_unary_expression ASSIGN expression
 	  {
 		$$ = new SimpleAssign ((Expression) $1, (Expression) $3);
+		lbag.AddLocation ($$, GetLocation ($2));
+	  }
+	| prefixed_unary_expression OP_POWER_ASSIGN expression
+	  {
+		$$ = new CompoundAssign (Binary.Operator.Power, (Expression) $1, (Expression) $3);
 		lbag.AddLocation ($$, GetLocation ($2));
 	  }
 	| prefixed_unary_expression OP_MULT_ASSIGN expression
@@ -7564,6 +7588,8 @@ string GetSymbolName (int token)
 		return "&";
 	case Token.BITWISE_OR:
 		return "|";
+	case Token.POWER:
+		return "^^";
 	case Token.STAR:
 		return "*";
 	case Token.PERCENT:
@@ -7600,6 +7626,8 @@ string GetSymbolName (int token)
 		return "->";
 	case Token.OP_COALESCING:	
 		return "??";
+	case Token.OP_POWER_ASSIGN:
+		return "^^=";
 	case Token.OP_MULT_ASSIGN:
 		return "*=";
 	case Token.OP_DIV_ASSIGN:
@@ -7836,6 +7864,7 @@ static string GetTokenName (int token)
 	case Token.OP_GT:
 	case Token.BITWISE_AND:
 	case Token.BITWISE_OR:
+	case Token.POWER:
 	case Token.STAR:
 	case Token.PERCENT:
 	case Token.DIV:
@@ -7852,6 +7881,7 @@ static string GetTokenName (int token)
 	case Token.OP_OR:
 	case Token.OP_PTR:
 	case Token.OP_COALESCING:	
+	case Token.OP_POWER_ASSIGN:
 	case Token.OP_MULT_ASSIGN:
 	case Token.OP_DIV_ASSIGN:
 	case Token.OP_MOD_ASSIGN:

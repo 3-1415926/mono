@@ -2128,7 +2128,7 @@ namespace Mono.CSharp
 						}
 					}
 
-					if ((b.oper == Operator.Multiply || b.oper == Operator.Division) && c.IsOneInteger)
+                    if ((b.oper == Operator.Multiply || b.oper == Operator.Division || b.oper == Operator.Power) && c.IsOneInteger)
 						return ReducedExpression.Create (b.left, b).Resolve (rc);
 
 					if ((b.oper & Operator.ShiftMask) != 0 && c is IntConstant) {
@@ -2187,6 +2187,9 @@ namespace Mono.CSharp
 
 					if (b.oper == Operator.Multiply && c.IsOneInteger)
 						return ReducedExpression.Create (b.right, b).Resolve (rc);
+
+                    if (b.oper == Operator.Power && c.IsOneInteger)
+                        return ReducedExpression.Create (b.left, b).Resolve (rc);
 				}
 
 				if (IsLifted) {
@@ -2422,6 +2425,7 @@ namespace Mono.CSharp
 
 		[Flags]
 		public enum Operator {
+            Power       = 18| ArithmeticMask,
 			Multiply	= 0 | ArithmeticMask,
 			Division	= 1 | ArithmeticMask,
 			Modulus		= 2 | ArithmeticMask,
@@ -2531,6 +2535,9 @@ namespace Mono.CSharp
 		{
 			string s;
 			switch (oper){
+			case Operator.Power:
+				s = "^^";
+				break;
 			case Operator.Multiply:
 				s = "*";
 				break;
@@ -2702,7 +2709,9 @@ namespace Mono.CSharp
 				return IsCompound ? "ModuloAssign" : "Modulo";
 			case Operator.Multiply:
 				return IsCompound ? "MultiplyAssign" : "Multiply";
-			case Operator.RightShift:
+            case Operator.Power:
+                return IsCompound ? "PowerAssign" : "Power";
+            case Operator.RightShift:
 				return IsCompound ? "RightShiftAssign" : "RightShift";
 			case Operator.Subtraction:
 				return IsCompound ? "SubtractAssign" : "Subtract";
@@ -2744,7 +2753,9 @@ namespace Mono.CSharp
 				return CSharp.Operator.OpType.Modulus;
 			case Operator.Multiply:
 				return CSharp.Operator.OpType.Multiply;
-			case Operator.RightShift:
+            case Operator.Power:
+                return CSharp.Operator.OpType.Power;
+            case Operator.RightShift:
 				return CSharp.Operator.OpType.RightShift;
 			case Operator.Subtraction:
 				return CSharp.Operator.OpType.Subtraction;
@@ -3062,6 +3073,7 @@ namespace Mono.CSharp
 			case Operator.Subtraction:
 				return left;
 				
+            case Operator.Power:
 			case Operator.Multiply:
 			case Operator.Division:
 			case Operator.Modulus:
@@ -3590,7 +3602,12 @@ namespace Mono.CSharp
 				return SLE.Expression.Modulo (le, re);
 			case Operator.Multiply:
 				return is_checked ? SLE.Expression.MultiplyChecked (le, re) : SLE.Expression.Multiply (le, re);
-			case Operator.RightShift:
+            case Operator.Power:
+                // TODO: convert the result and handle user-defined overloads (not necessarily on double type)
+                var leDouble = le.Type == typeof(double) ? le : SLE.Expression.Convert(le, typeof(double));
+                var reDouble = re.Type == typeof(double) ? re : SLE.Expression.Convert(re, typeof(double));
+                return SLE.Expression.Power(leDouble, reDouble);
+            case Operator.RightShift:
 				return SLE.Expression.RightShift (le, re);
 			case Operator.Subtraction:
 				return is_checked ? SLE.Expression.SubtractChecked (le, re) : SLE.Expression.Subtract (le, re);
@@ -4738,17 +4755,53 @@ namespace Mono.CSharp
 
 		public void EmitOperator (EmitContext ec, Expression left, Expression right)
 		{
-			left.Emit (ec);
-			right.Emit (ec);
+            if (oper == Operator.Power)
+            {
+                left.Emit(ec);
+                if (left.Type.BuiltinType != BuiltinTypeSpec.Type.Double)
+                    ec.Emit(OpCodes.Conv_R8);
+                right.Emit(ec);
+                if (right.Type.BuiltinType != BuiltinTypeSpec.Type.Double)
+                    ec.Emit(OpCodes.Conv_R8);
 
-			EmitOperatorOpcode (ec, oper, left.Type, right);
+                ec.Emit(OpCodes.Call, ec.Module.PredefinedMembers.MathPow.Get());
+                switch (left.Type.BuiltinType)
+                {
+                    case BuiltinTypeSpec.Type.Byte: 
+                    case BuiltinTypeSpec.Type.SByte: 
+                    case BuiltinTypeSpec.Type.UShort:
+                    case BuiltinTypeSpec.Type.Short:
+                    case BuiltinTypeSpec.Type.Int:
+                        ec.Emit(OpCodes.Conv_I4); 
+                        break;
+                    case BuiltinTypeSpec.Type.UInt: ec.Emit(OpCodes.Conv_U4); 
+                        ec.Emit(OpCodes.Conv_U4);
+                        break;
+                    case BuiltinTypeSpec.Type.Long: 
+                        ec.Emit(OpCodes.Conv_I8); 
+                        break;
+                    case BuiltinTypeSpec.Type.ULong:
+                        ec.Emit(OpCodes.Conv_U8); 
+                        break;
+                    case BuiltinTypeSpec.Type.Decimal: ec.Emit(OpCodes.Call, ec.Module.PredefinedMembers.DecimalCtorDouble.Get()); break;
+                    case BuiltinTypeSpec.Type.Double: break;
+                    default: throw new InvalidOperationException(
+                        string.Format("Conversion from {0} to {1} not supported in an exponentiation result", typeof(double).Name, left.Type.Name));
+                }
+                return;
+            }
 
-			//
-			// Emit result enumerable conversion this way because it's quite complicated get it
-			// to resolved tree because expression tree cannot see it.
-			//
-			if (enum_conversion != 0)
-				ConvCast.Emit (ec, enum_conversion);
+            left.Emit(ec);
+            right.Emit(ec);
+
+            EmitOperatorOpcode(ec, oper, left.Type, right);
+
+            //
+            // Emit result enumerable conversion this way because it's quite complicated get it
+            // to resolved tree because expression tree cannot see it.
+            //
+            if (enum_conversion != 0)
+                ConvCast.Emit(ec, enum_conversion);
 		}
 
 		public override void EmitSideEffect (EmitContext ec)
@@ -4884,7 +4937,10 @@ namespace Mono.CSharp
 				else
 					method_name = "Multiply";
 				break;
-			case Operator.RightShift:
+            case Operator.Power:
+                method_name = "Power";
+                break;
+            case Operator.RightShift:
 				method_name = "RightShift";
 				break;
 			case Operator.Subtraction:

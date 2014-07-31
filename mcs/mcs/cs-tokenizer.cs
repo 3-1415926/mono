@@ -3491,11 +3491,16 @@ namespace Mono.CSharp
 
 				case '^':
 					val = ltb.Create (current_source, ref_line, col);
+                    bool isPower = false;
+                    if (peek_char () == '^'){
+                        get_char ();
+                        isPower = true;
+                    }
 					if (peek_char () == '='){
 						get_char ();
-						return Token.OP_XOR_ASSIGN;
+						return isPower ? Token.OP_POWER_ASSIGN : Token.OP_XOR_ASSIGN;
 					}
-					return Token.CARRET;
+					return isPower ? Token.POWER : Token.CARRET;
 
 				case ':':
 					val = ltb.Create (current_source, ref_line, col);
