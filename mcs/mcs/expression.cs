@@ -4753,40 +4753,234 @@ namespace Mono.CSharp
 			EmitOperator (ec, left, right);
 		}
 
+        private TypeSpec GetBoundingIntegerType(EmitContext ec, TypeSpec type)
+        {
+            switch (type.BuiltinType)
+            {
+                case BuiltinTypeSpec.Type.Byte:
+                case BuiltinTypeSpec.Type.SByte:
+                case BuiltinTypeSpec.Type.UShort:
+                case BuiltinTypeSpec.Type.Short:
+                case BuiltinTypeSpec.Type.Int:
+                case BuiltinTypeSpec.Type.Char:
+                    return ec.BuiltinTypes.Int;
+                case BuiltinTypeSpec.Type.UInt:
+                    return ec.BuiltinTypes.UInt;
+                case BuiltinTypeSpec.Type.Long:
+                    return ec.BuiltinTypes.Long;
+                case BuiltinTypeSpec.Type.ULong:
+                    return ec.BuiltinTypes.ULong;
+                default:
+                    throw new ArgumentException("Cannot implicitly convert " + type.Name + " to an integer type");
+            }
+        }
+
+        private MethodInfo GetIntegerPowMethod(EmitContext ec, TypeSpec baseType, TypeSpec expType)
+        {
+            const string methodName = "IntPow";
+            baseType = GetBoundingIntegerType(ec, baseType);
+            expType = GetBoundingIntegerType(ec, expType);
+            var parameters = new[] { baseType.GetMetaInfo(), expType.GetMetaInfo() };
+            var existingMethod = (MethodInfo)ec.Module.Builder.GetModuleType().__GetDeclaredMethods()
+                .SingleOrDefault(m => m.Name == methodName && m.GetParameters().Select(p => p.ParameterType).SequenceEqual(parameters));
+            if (existingMethod != null)
+                return existingMethod;
+
+            var method = ec.Module.Builder.DefineGlobalMethod(methodName, 
+                MethodAttributes.Assembly | MethodAttributes.Static, baseType.GetMetaInfo(), parameters);
+            var ig = method.GetILGenerator();
+            Action<TypeSpec> emitOne = t =>
+            {
+                if (t.BuiltinType <= BuiltinTypeSpec.Type.UInt)
+                    ig.Emit(OpCodes.Ldc_I4_1);
+                else
+                    ig.Emit(OpCodes.Ldc_I8, 1L);
+            };
+            Action<TypeSpec> emitMinusOne = t =>
+            {
+                if (t.BuiltinType <= BuiltinTypeSpec.Type.UInt)
+                    ig.Emit(OpCodes.Ldc_I4, -1);
+                else
+                    ig.Emit(OpCodes.Ldc_I8, -1L);
+            };
+            Action<TypeSpec> emitZero = t =>
+            {
+                if (t.BuiltinType <= BuiltinTypeSpec.Type.UInt)
+                    ig.Emit(OpCodes.Ldc_I4_0);
+                else
+                    ig.Emit(OpCodes.Ldc_I8, 0L);
+            };
+            Action<TypeSpec> emitMul = t =>
+            {
+                if (ec.HasSet(EmitContext.Options.CheckedScope))
+                    ig.Emit(OpCodes.Mul);
+                else if ((int)t.BuiltinType % 2 == 0)
+                    ig.Emit(OpCodes.Mul_Ovf_Un);
+                else
+                    ig.Emit(OpCodes.Mul_Ovf);
+            };
+
+            // type is signed
+            if ((int)expType.BuiltinType % 2 != 0)
+            {
+                // if (@exp < 0)
+                // {
+                //   if (@base == 0)
+                //     throw new DivisionByZeroException();
+                //   if (@exp == -1 && (@base == 1 || @base == -1))
+                //     return @base;
+                //   return 0;
+                // }
+
+                var checkExpMinusOne = ig.DefineLabel();
+                var checkExpZero = ig.DefineLabel();
+                var retZero = ig.DefineLabel();
+
+                ig.Emit(OpCodes.Ldarg_1);
+                emitZero(expType);
+                ig.Emit(OpCodes.Bge, checkExpZero);
+                    
+                ig.Emit(OpCodes.Ldarg_0);
+                emitZero(baseType);
+                ig.Emit(OpCodes.Bne_Un, checkExpMinusOne);
+                ig.Emit(OpCodes.Newobj, (ConstructorInfo)ec.Module.PredefinedMembers.DivideByZeroExceptionCtor.Resolve(loc).GetMetaInfo());
+                ig.Emit(OpCodes.Throw);
+
+                ig.MarkLabel(checkExpMinusOne);
+                ig.Emit(OpCodes.Ldarg_1);
+                emitMinusOne(expType);
+                ig.Emit(OpCodes.Ceq);
+                ig.Emit(OpCodes.Ldarg_0);
+                emitOne(expType);
+                ig.Emit(OpCodes.Ceq);
+                ig.Emit(OpCodes.Ldarg_0);
+                emitMinusOne(expType);
+                ig.Emit(OpCodes.Ceq);
+                ig.Emit(OpCodes.Or);
+                ig.Emit(OpCodes.And);
+                ig.Emit(OpCodes.Brfalse, retZero);
+                ig.Emit(OpCodes.Ldarg_0);
+                ig.Emit(OpCodes.Ret);
+
+                ig.MarkLabel(retZero);
+                emitZero(baseType);
+                ig.Emit(OpCodes.Ret);
+
+                ig.MarkLabel(checkExpZero);
+            }
+                
+            // if (@exp == 0)
+            // {
+            //   if (@base == 0)
+            //     throw new NotFiniteNumberException();
+            //   return 1;
+            // }
+
+            var mainAlgoStart = ig.DefineLabel();
+            var retOne = ig.DefineLabel();
+
+            ig.Emit(OpCodes.Ldarg_1);
+            emitZero(expType);
+            ig.Emit(OpCodes.Bne_Un, mainAlgoStart);
+
+            ig.Emit(OpCodes.Ldarg_0);
+            emitZero(baseType);
+            ig.Emit(OpCodes.Bne_Un, retOne);
+
+            ig.Emit(OpCodes.Newobj, (ConstructorInfo)ec.Module.PredefinedMembers.NotFiniteNumberExceptionCtor.Resolve(loc).GetMetaInfo());
+            ig.Emit(OpCodes.Throw);
+
+            ig.MarkLabel(retOne);
+            emitOne(baseType);
+            ig.Emit(OpCodes.Ret);
+
+            ig.MarkLabel(mainAlgoStart);
+
+            // T result = 1, base = @base, exp = @exp;
+            // while (true)
+            // {
+            //   if ((exp & 1) != 0)
+            //   {
+            //     result *= base;
+            //     exp--;
+            //   }
+            //   if (exp == 0)
+            //     break;
+            //   base *= base;
+            //   exp >>= 1;
+            // }
+            // return result;
+
+            var startLabel = ig.DefineLabel();
+            var midLabel = ig.DefineLabel();
+            var endLabel = ig.DefineLabel();
+            var resultVar = ig.DeclareLocal(baseType.GetMetaInfo());
+
+            emitOne(baseType);
+            ig.Emit(OpCodes.Stloc, resultVar);
+
+            ig.MarkLabel(startLabel);
+            ig.Emit(OpCodes.Ldarg_1);
+            emitOne(expType);
+            ig.Emit(OpCodes.And);
+            emitZero(expType);
+            ig.Emit(OpCodes.Beq, midLabel);
+            ig.Emit(OpCodes.Ldloc, resultVar);
+            ig.Emit(OpCodes.Ldarg_0);
+            emitMul(baseType);
+            ig.Emit(OpCodes.Stloc, resultVar);
+            ig.Emit(OpCodes.Ldarg_1);
+            emitOne(expType);
+            ig.Emit(OpCodes.Sub);
+            ig.Emit(OpCodes.Starg_S, 1);
+            ig.MarkLabel(midLabel);
+
+            ig.Emit(OpCodes.Ldarg_1);
+            emitZero(expType);
+            ig.Emit(OpCodes.Beq, endLabel);
+
+            ig.Emit(OpCodes.Ldarg_0);
+            ig.Emit(OpCodes.Dup);
+            emitMul(baseType);
+            ig.Emit(OpCodes.Starg_S, 0);
+            ig.Emit(OpCodes.Ldarg_1);
+            ig.Emit(OpCodes.Ldc_I4_1);
+            ig.Emit(OpCodes.Shr);
+            ig.Emit(OpCodes.Starg, 1);
+            ig.Emit(OpCodes.Br, startLabel);
+            ig.MarkLabel(endLabel);
+
+            ig.Emit(OpCodes.Ldloc, resultVar);
+            ig.Emit(OpCodes.Ret);
+
+            method.Bake();
+            return method;
+        }
+
 		public void EmitOperator (EmitContext ec, Expression left, Expression right)
 		{
             if (oper == Operator.Power)
             {
-                left.Emit(ec);
-                if (left.Type.BuiltinType != BuiltinTypeSpec.Type.Double)
-                    ec.Emit(OpCodes.Conv_R8);
-                right.Emit(ec);
-                if (right.Type.BuiltinType != BuiltinTypeSpec.Type.Double)
-                    ec.Emit(OpCodes.Conv_R8);
-
-                ec.Emit(OpCodes.Call, ec.Module.PredefinedMembers.MathPow.Get());
-                switch (left.Type.BuiltinType)
+                if (left.Type.BuiltinType >= BuiltinTypeSpec.Type.Byte && left.Type.BuiltinType <= BuiltinTypeSpec.Type.ULong
+                    && right.Type.BuiltinType >= BuiltinTypeSpec.Type.Byte && right.Type.BuiltinType <= BuiltinTypeSpec.Type.ULong)
                 {
-                    case BuiltinTypeSpec.Type.Byte: 
-                    case BuiltinTypeSpec.Type.SByte: 
-                    case BuiltinTypeSpec.Type.UShort:
-                    case BuiltinTypeSpec.Type.Short:
-                    case BuiltinTypeSpec.Type.Int:
-                        ec.Emit(OpCodes.Conv_I4); 
-                        break;
-                    case BuiltinTypeSpec.Type.UInt: ec.Emit(OpCodes.Conv_U4); 
-                        ec.Emit(OpCodes.Conv_U4);
-                        break;
-                    case BuiltinTypeSpec.Type.Long: 
-                        ec.Emit(OpCodes.Conv_I8); 
-                        break;
-                    case BuiltinTypeSpec.Type.ULong:
-                        ec.Emit(OpCodes.Conv_U8); 
-                        break;
-                    case BuiltinTypeSpec.Type.Decimal: ec.Emit(OpCodes.Call, ec.Module.PredefinedMembers.DecimalCtorDouble.Get()); break;
-                    case BuiltinTypeSpec.Type.Double: break;
-                    default: throw new InvalidOperationException(
-                        string.Format("Conversion from {0} to {1} not supported in an exponentiation result", typeof(double).Name, left.Type.Name));
+                    var method = GetIntegerPowMethod(ec, left.Type, right.Type);
+                    left.Emit(ec);
+                    right.Emit(ec);
+                    ec.Emit(OpCodes.Call, method);
+                }
+                else
+                {
+                    left.Emit(ec);
+                    if (left.Type.BuiltinType != BuiltinTypeSpec.Type.Double)
+                        ec.Emit(OpCodes.Conv_R8);
+                    right.Emit(ec);
+                    if (right.Type.BuiltinType != BuiltinTypeSpec.Type.Double)
+                        ec.Emit(OpCodes.Conv_R8);
+
+                    ec.Emit(OpCodes.Call, ec.Module.PredefinedMembers.MathPow.Resolve(loc));
+                    if (left.Type.BuiltinType == BuiltinTypeSpec.Type.Decimal)
+                        ec.Emit(OpCodes.Call, ec.Module.PredefinedMembers.DecimalCtorDouble.Resolve(loc));
                 }
                 return;
             }

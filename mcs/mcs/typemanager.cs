@@ -199,6 +199,8 @@ namespace Mono.CSharp
 		public readonly PredefinedType Dictionary;
 		public readonly PredefinedType Hashtable;
         public readonly PredefinedType Math;
+        public readonly PredefinedType DivideByZeroException;
+        public readonly PredefinedType NotFiniteNumberException;
 		public readonly TypeSpec[] SwitchUserTypes;
 
 		//
@@ -263,6 +265,8 @@ namespace Mono.CSharp
 			Dictionary = new PredefinedType (module, MemberKind.Class, "System.Collections.Generic", "Dictionary", 2);
 			Hashtable = new PredefinedType (module, MemberKind.Class, "System.Collections", "Hashtable");
             Math = new PredefinedType (module, MemberKind.Class, "System", "Math");
+            DivideByZeroException = new PredefinedType (module, MemberKind.Class, "System", "DivideByZeroException");
+            NotFiniteNumberException = new PredefinedType(module, MemberKind.Class, "System", "NotFiniteNumberException");
 
 			Expression = new PredefinedType (module, MemberKind.Class, "System.Linq.Expressions", "Expression");
 			ExpressionGeneric = new PredefinedType (module, MemberKind.Class, "System.Linq.Expressions", "Expression", 1);
@@ -365,6 +369,7 @@ namespace Mono.CSharp
 		public readonly PredefinedMember<MethodSpec> DelegateEqual;
 		public readonly PredefinedMember<MethodSpec> DelegateInequal;
 		public readonly PredefinedMember<MethodSpec> DelegateRemove;
+        public readonly PredefinedMember<MethodSpec> DivideByZeroExceptionCtor;
 		public readonly PredefinedMember<MethodSpec> DynamicAttributeCtor;
 		public readonly PredefinedMember<MethodSpec> FieldInfoGetFieldFromHandle;
 		public readonly PredefinedMember<MethodSpec> FieldInfoGetFieldFromHandle2;
@@ -379,6 +384,7 @@ namespace Mono.CSharp
 		public readonly PredefinedMember<MethodSpec> MonitorEnter;
 		public readonly PredefinedMember<MethodSpec> MonitorEnter_v4;
 		public readonly PredefinedMember<MethodSpec> MonitorExit;
+        public readonly PredefinedMember<MethodSpec> NotFiniteNumberExceptionCtor;
 		public readonly PredefinedMember<PropertySpec> RuntimeCompatibilityWrapNonExceptionThrows;
 		public readonly PredefinedMember<MethodSpec> RuntimeHelpersInitializeArray;
 		public readonly PredefinedMember<PropertySpec> RuntimeHelpersOffsetToStringData;
@@ -601,6 +607,9 @@ namespace Mono.CSharp
 			DelegateInequal = new PredefinedMember<MethodSpec> (module, btypes.Delegate,
 				new MemberFilter (Operator.GetMetadataName (Operator.OpType.Inequality), 0, MemberKind.Operator, null, btypes.Bool));
 
+            DivideByZeroExceptionCtor = new PredefinedMember<MethodSpec> (module, types.DivideByZeroException, 
+                MemberFilter.Constructor (ParametersCompiled.CreateFullyResolved()));
+
 			DynamicAttributeCtor = new PredefinedMember<MethodSpec> (module, atypes.Dynamic,
 				MemberFilter.Constructor (ParametersCompiled.CreateFullyResolved (
 					ArrayContainer.MakeType (module, btypes.Bool))));
@@ -670,7 +679,10 @@ namespace Mono.CSharp
 
 			MonitorExit = new PredefinedMember<MethodSpec> (module, types.Monitor, "Exit", btypes.Object);
 
-			RuntimeCompatibilityWrapNonExceptionThrows = new PredefinedMember<PropertySpec> (module, atypes.RuntimeCompatibility,
+            NotFiniteNumberExceptionCtor = new PredefinedMember<MethodSpec>(module, types.NotFiniteNumberException,
+                MemberFilter.Constructor(ParametersCompiled.CreateFullyResolved()));
+
+            RuntimeCompatibilityWrapNonExceptionThrows = new PredefinedMember<PropertySpec>(module, atypes.RuntimeCompatibility,
 				MemberFilter.Property ("WrapNonExceptionThrows", btypes.Bool));
 
 			RuntimeHelpersInitializeArray = new PredefinedMember<MethodSpec> (module, types.RuntimeHelpers,
