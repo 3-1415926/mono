@@ -85,8 +85,14 @@ namespace Mono.CSharp.Nullable
 
 		public static TypeSpec GetEnumUnderlyingType (ModuleContainer module, TypeSpec nullableEnum)
 		{
+			return MakeType (module, EnumSpec.GetUnderlyingType (GetUnderlyingType (nullableEnum)));
+		}
+
+		public static TypeSpec MakeType (ModuleContainer module, TypeSpec underlyingType)
+		{
 			return module.PredefinedTypes.Nullable.TypeSpec.MakeGenericType (module,
-				new[] { EnumSpec.GetUnderlyingType (GetUnderlyingType (nullableEnum)) });
+				new[] { underlyingType });
+
 		}
 	}
 
@@ -701,7 +707,7 @@ namespace Mono.CSharp.Nullable
 			}
 
 			if (!type.IsNullableType)
-				type = rc.Module.PredefinedTypes.Nullable.TypeSpec.MakeGenericType (rc.Module, new[] { type });
+				type = NullableInfo.MakeType (rc.Module, type);
 
 			return Wrap.Create (expr, type);
 		}
@@ -1197,6 +1203,12 @@ namespace Mono.CSharp.Nullable
 				return ReducedExpression.Create (right, this, false).Resolve (ec);
 
 			left = Convert.ImplicitConversion (ec, unwrap ?? left, rtype, loc);
+
+			if (TypeSpec.IsValueType (left.Type) && !left.Type.IsNullableType) {
+				Warning_UnreachableExpression (ec, right.Location);
+				return ReducedExpression.Create (left, this, false).Resolve (ec);
+			}
+
 			type = rtype;
 			return this;
 		}
