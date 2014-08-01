@@ -360,11 +360,12 @@ namespace Mono.CSharp
 		public readonly PredefinedMember<MethodSpec> AsyncStateMachineAttributeCtor;
 		public readonly PredefinedMember<MethodSpec> DebuggerBrowsableAttributeCtor;
 		public readonly PredefinedMember<MethodSpec> DecimalCtor;
-        public readonly PredefinedMember<MethodSpec> DecimalCtorDouble;
         public readonly PredefinedMember<MethodSpec> DecimalCtorInt;
 		public readonly PredefinedMember<MethodSpec> DecimalCtorLong;
 		public readonly PredefinedMember<MethodSpec> DecimalConstantAttributeCtor;
-		public readonly PredefinedMember<MethodSpec> DefaultMemberAttributeCtor;
+        public readonly PredefinedMember<MethodSpec> DecimalFromDouble;
+        public readonly PredefinedMember<MethodSpec> DecimalToDouble;
+        public readonly PredefinedMember<MethodSpec> DefaultMemberAttributeCtor;
 		public readonly PredefinedMember<MethodSpec> DelegateCombine;
 		public readonly PredefinedMember<MethodSpec> DelegateEqual;
 		public readonly PredefinedMember<MethodSpec> DelegateInequal;
@@ -582,9 +583,6 @@ namespace Mono.CSharp
 				MemberFilter.Constructor (ParametersCompiled.CreateFullyResolved (
 					btypes.Int, btypes.Int, btypes.Int, btypes.Bool, btypes.Byte)));
 
-            DecimalCtorDouble = new PredefinedMember<MethodSpec>(module, btypes.Decimal,
-                MemberFilter.Constructor(ParametersCompiled.CreateFullyResolved(btypes.Double)));
-
             DecimalCtorInt = new PredefinedMember<MethodSpec>(module, btypes.Decimal,
 				MemberFilter.Constructor (ParametersCompiled.CreateFullyResolved (btypes.Int)));
 
@@ -595,7 +593,15 @@ namespace Mono.CSharp
 				MemberFilter.Constructor (ParametersCompiled.CreateFullyResolved (
 					btypes.Byte, btypes.Byte, btypes.UInt, btypes.UInt, btypes.UInt)));
 
-			DefaultMemberAttributeCtor = new PredefinedMember<MethodSpec> (module, atypes.DefaultMember,
+            DecimalFromDouble = new PredefinedMember<MethodSpec>(module, btypes.Decimal,
+				new MemberFilter (Operator.GetMetadataName (Operator.OpType.Explicit), 0, 
+                    MemberKind.Operator, ParametersCompiled.CreateFullyResolved(btypes.Double), btypes.Decimal));
+
+            DecimalToDouble = new PredefinedMember<MethodSpec>(module, btypes.Decimal,
+                new MemberFilter(Operator.GetMetadataName(Operator.OpType.Explicit), 0,
+                    MemberKind.Operator, ParametersCompiled.CreateFullyResolved(btypes.Decimal), btypes.Double));
+
+            DefaultMemberAttributeCtor = new PredefinedMember<MethodSpec>(module, atypes.DefaultMember,
 				MemberFilter.Constructor (ParametersCompiled.CreateFullyResolved (btypes.String)));
 
 			DelegateCombine = new PredefinedMember<MethodSpec> (module, btypes.Delegate, "Combine", btypes.Delegate, btypes.Delegate);

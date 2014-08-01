@@ -2101,7 +2101,6 @@ namespace Mono.CSharp
                         arguments.Add(new Argument(convertedLeft));
                         arguments.Add(new Argument(convertedRight));
                         var powCall = new Invocation(
-                            //new MemberAccess(new MemberAccess(new QualifiedAliasMember("global", "System", b.Location), "Math"), "Pow"),
                             new MethodGroupExpr(rc.Module.PredefinedMembers.MathPow.Get(), rc.Module.PredefinedTypes.Math.TypeSpec, b.Location),
                             arguments);
                         powCall.Resolve(rc);
@@ -3621,9 +3620,7 @@ namespace Mono.CSharp
 				return is_checked ? SLE.Expression.MultiplyChecked (le, re) : SLE.Expression.Multiply (le, re);
             case Operator.Power:
                 // TODO: convert the result and handle user-defined overloads (not necessarily on double type)
-                var leDouble = le.Type == typeof(double) ? le : SLE.Expression.Convert(le, typeof(double));
-                var reDouble = re.Type == typeof(double) ? re : SLE.Expression.Convert(re, typeof(double));
-                return SLE.Expression.Power(leDouble, reDouble);
+                return SLE.Expression.Power(le, re);
             case Operator.RightShift:
 				return SLE.Expression.RightShift (le, re);
 			case Operator.Subtraction:
@@ -4993,15 +4990,15 @@ namespace Mono.CSharp
                 else
                 {
                     left.Emit(ec);
-                    if (left.Type.BuiltinType != BuiltinTypeSpec.Type.Double)
-                        ec.Emit(OpCodes.Conv_R8);
+                    if (left.Type.BuiltinType == BuiltinTypeSpec.Type.Decimal)
+                        ec.Emit(OpCodes.Call, ec.Module.PredefinedMembers.DecimalToDouble.Get());
                     right.Emit(ec);
-                    if (right.Type.BuiltinType != BuiltinTypeSpec.Type.Double)
-                        ec.Emit(OpCodes.Conv_R8);
+                    if (right.Type.BuiltinType == BuiltinTypeSpec.Type.Decimal)
+                        ec.Emit(OpCodes.Call, ec.Module.PredefinedMembers.DecimalToDouble.Get());
 
                     ec.Emit(OpCodes.Call, ec.Module.PredefinedMembers.MathPow.Get());
                     if (left.Type.BuiltinType == BuiltinTypeSpec.Type.Decimal)
-                        ec.Emit(OpCodes.Call, ec.Module.PredefinedMembers.DecimalCtorDouble.Get());
+                        ec.Emit(OpCodes.Call, ec.Module.PredefinedMembers.DecimalFromDouble.Get());
                 }
                 return;
             }
