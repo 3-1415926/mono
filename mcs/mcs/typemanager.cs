@@ -657,7 +657,7 @@ namespace Mono.CSharp
 							}, false),
 					null));
 
-            MathPow = new PredefinedMember<MethodSpec> (module, types.Math, "Pow", MemberKind.Method);
+            MathPow = new PredefinedMember<MethodSpec> (module, types.Math, "Pow", btypes.Double, btypes.Double);
 
 			MethodInfoGetMethodFromHandle = new PredefinedMember<MethodSpec> (module, types.MethodBase,
 				"GetMethodFromHandle", MemberKind.Method, types.RuntimeMethodHandle);

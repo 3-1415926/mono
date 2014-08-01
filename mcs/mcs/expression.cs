@@ -2093,8 +2093,24 @@ namespace Mono.CSharp
 					b.left = Convert.ImplicitConversion (rc, b.left, left, b.left.Location);
 					b.right = Convert.ImplicitConversion (rc, b.right, right, b.right.Location);
 
-					return b.ResolveUserOperator (rc, b.left, b.right);
-				}
+                    if (b.oper == Operator.Power)
+                    {
+                        var convertedLeft = Convert.ExplicitConversion(rc, b.left, rc.BuiltinTypes.Double, b.left.Location);
+                        var convertedRight = Convert.ExplicitConversion(rc, b.Right, rc.BuiltinTypes.Double, b.right.Location);
+                        var arguments = new Arguments(2);
+                        arguments.Add(new Argument(convertedLeft));
+                        arguments.Add(new Argument(convertedRight));
+                        var powCall = new Invocation(
+                            //new MemberAccess(new MemberAccess(new QualifiedAliasMember("global", "System", b.Location), "Math"), "Pow"),
+                            new MethodGroupExpr(rc.Module.PredefinedMembers.MathPow.Get(), rc.Module.PredefinedTypes.Math.TypeSpec, b.Location),
+                            arguments);
+                        powCall.Resolve(rc);
+                        var convertedResult = Convert.ExplicitConversion(rc, powCall, rc.BuiltinTypes.Decimal, b.Location);
+                        return convertedResult;
+                    }
+
+                    return b.ResolveUserOperator(rc, b.left, b.right);
+                }
 
 				c = right_expr as Constant;
 				if (c != null) {
@@ -2425,7 +2441,6 @@ namespace Mono.CSharp
 
 		[Flags]
 		public enum Operator {
-            Power       = 18| ArithmeticMask,
 			Multiply	= 0 | ArithmeticMask,
 			Division	= 1 | ArithmeticMask,
 			Modulus		= 2 | ArithmeticMask,
@@ -2448,6 +2463,8 @@ namespace Mono.CSharp
 
 			LogicalAnd	= 16 | LogicalMask,
 			LogicalOr	= 17 | LogicalMask,
+            
+            Power       = 18 | ArithmeticMask,
 
 			//
 			// Operator masks
@@ -4753,7 +4770,7 @@ namespace Mono.CSharp
 			EmitOperator (ec, left, right);
 		}
 
-        private TypeSpec GetBoundingIntegerType(EmitContext ec, TypeSpec type)
+        private static TypeSpec GetBoundingIntegerType(BuiltinTypes btypes, TypeSpec type)
         {
             switch (type.BuiltinType)
             {
@@ -4763,32 +4780,20 @@ namespace Mono.CSharp
                 case BuiltinTypeSpec.Type.Short:
                 case BuiltinTypeSpec.Type.Int:
                 case BuiltinTypeSpec.Type.Char:
-                    return ec.BuiltinTypes.Int;
+                    return btypes.Int;
                 case BuiltinTypeSpec.Type.UInt:
-                    return ec.BuiltinTypes.UInt;
+                    return btypes.UInt;
                 case BuiltinTypeSpec.Type.Long:
-                    return ec.BuiltinTypes.Long;
+                    return btypes.Long;
                 case BuiltinTypeSpec.Type.ULong:
-                    return ec.BuiltinTypes.ULong;
+                    return btypes.ULong;
                 default:
                     throw new ArgumentException("Cannot implicitly convert " + type.Name + " to an integer type");
             }
         }
 
-        private MethodInfo GetIntegerPowMethod(EmitContext ec, TypeSpec baseType, TypeSpec expType)
+        private static void EmitIntegerPowMethod(EmitContext ec, ILGenerator ig, TypeSpec baseType, TypeSpec expType)
         {
-            const string methodName = "IntPow";
-            baseType = GetBoundingIntegerType(ec, baseType);
-            expType = GetBoundingIntegerType(ec, expType);
-            var parameters = new[] { baseType.GetMetaInfo(), expType.GetMetaInfo() };
-            var existingMethod = (MethodInfo)ec.Module.Builder.GetModuleType().__GetDeclaredMethods()
-                .SingleOrDefault(m => m.Name == methodName && m.GetParameters().Select(p => p.ParameterType).SequenceEqual(parameters));
-            if (existingMethod != null)
-                return existingMethod;
-
-            var method = ec.Module.Builder.DefineGlobalMethod(methodName, 
-                MethodAttributes.Assembly | MethodAttributes.Static, baseType.GetMetaInfo(), parameters);
-            var ig = method.GetILGenerator();
             Action<TypeSpec> emitOne = t =>
             {
                 if (t.BuiltinType <= BuiltinTypeSpec.Type.UInt)
@@ -4812,7 +4817,7 @@ namespace Mono.CSharp
             };
             Action<TypeSpec> emitMul = t =>
             {
-                if (ec.HasSet(EmitContext.Options.CheckedScope))
+                if (ec.HasSet(BuilderContext.Options.CheckedScope))
                     ig.Emit(OpCodes.Mul);
                 else if ((int)t.BuiltinType % 2 == 0)
                     ig.Emit(OpCodes.Mul_Ovf_Un);
@@ -4839,11 +4844,11 @@ namespace Mono.CSharp
                 ig.Emit(OpCodes.Ldarg_1);
                 emitZero(expType);
                 ig.Emit(OpCodes.Bge, checkExpZero);
-                    
+
                 ig.Emit(OpCodes.Ldarg_0);
                 emitZero(baseType);
                 ig.Emit(OpCodes.Bne_Un, checkExpMinusOne);
-                ig.Emit(OpCodes.Newobj, (ConstructorInfo)ec.Module.PredefinedMembers.DivideByZeroExceptionCtor.Resolve(loc).GetMetaInfo());
+                ig.Emit(OpCodes.Newobj, (ConstructorInfo)ec.Module.PredefinedMembers.DivideByZeroExceptionCtor.Get().GetMetaInfo());
                 ig.Emit(OpCodes.Throw);
 
                 ig.MarkLabel(checkExpMinusOne);
@@ -4868,7 +4873,7 @@ namespace Mono.CSharp
 
                 ig.MarkLabel(checkExpZero);
             }
-                
+
             // if (@exp == 0)
             // {
             //   if (@base == 0)
@@ -4887,7 +4892,7 @@ namespace Mono.CSharp
             emitZero(baseType);
             ig.Emit(OpCodes.Bne_Un, retOne);
 
-            ig.Emit(OpCodes.Newobj, (ConstructorInfo)ec.Module.PredefinedMembers.NotFiniteNumberExceptionCtor.Resolve(loc).GetMetaInfo());
+            ig.Emit(OpCodes.Newobj, (ConstructorInfo)ec.Module.PredefinedMembers.NotFiniteNumberExceptionCtor.Get().GetMetaInfo());
             ig.Emit(OpCodes.Throw);
 
             ig.MarkLabel(retOne);
@@ -4952,7 +4957,23 @@ namespace Mono.CSharp
 
             ig.Emit(OpCodes.Ldloc, resultVar);
             ig.Emit(OpCodes.Ret);
+        }
 
+        private MethodInfo GetIntegerPowMethod(EmitContext ec, TypeSpec baseType, TypeSpec expType)
+        {
+            const string methodName = "IntPow";
+            baseType = GetBoundingIntegerType(ec.BuiltinTypes, baseType);
+            expType = GetBoundingIntegerType(ec.BuiltinTypes, expType);
+            var parameters = new[] { baseType.GetMetaInfo(), expType.GetMetaInfo() };
+            var existingMethod = (MethodInfo)ec.Module.Builder.GetModuleType().__GetDeclaredMethods()
+                .SingleOrDefault(m => m.Name == methodName && m.GetParameters().Select(p => p.ParameterType).SequenceEqual(parameters));
+            if (existingMethod != null)
+                return existingMethod;
+
+            var method = ec.Module.Builder.DefineGlobalMethod(methodName, 
+                MethodAttributes.Assembly | MethodAttributes.Static, baseType.GetMetaInfo(), parameters);
+            var ig = method.GetILGenerator();
+            EmitIntegerPowMethod(ec, ig, baseType, expType);
             method.Bake();
             return method;
         }
@@ -4978,9 +4999,9 @@ namespace Mono.CSharp
                     if (right.Type.BuiltinType != BuiltinTypeSpec.Type.Double)
                         ec.Emit(OpCodes.Conv_R8);
 
-                    ec.Emit(OpCodes.Call, ec.Module.PredefinedMembers.MathPow.Resolve(loc));
+                    ec.Emit(OpCodes.Call, ec.Module.PredefinedMembers.MathPow.Get());
                     if (left.Type.BuiltinType == BuiltinTypeSpec.Type.Decimal)
-                        ec.Emit(OpCodes.Call, ec.Module.PredefinedMembers.DecimalCtorDouble.Resolve(loc));
+                        ec.Emit(OpCodes.Call, ec.Module.PredefinedMembers.DecimalCtorDouble.Get());
                 }
                 return;
             }

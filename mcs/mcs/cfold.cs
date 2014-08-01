@@ -611,30 +611,30 @@ namespace Mono.CSharp {
                         double res = Math.Pow(((FloatConstant)left).DoubleValue, ((FloatConstant)right).DoubleValue);
                         return new FloatConstant(ec.BuiltinTypes, res, left.Location);
                     }
-                    else if (left is ULongConstant)
-                    {
-                        ulong res = (ulong)Math.Round(Math.Pow(((ULongConstant)left).Value, ((ULongConstant)right).Value));
-                        return new ULongConstant(ec.BuiltinTypes, res, left.Location);
-                    }
-                    else if (left is LongConstant)
-                    {
-                        long res = (long)Math.Round(Math.Pow(((LongConstant)left).Value, ((LongConstant)right).Value));
-                        return new LongConstant(ec.BuiltinTypes, res, left.Location);
-                    }
-                    else if (left is UIntConstant)
-                    {
-                        uint res = (uint)Math.Round(Math.Pow(((UIntConstant)left).Value, ((UIntConstant)right).Value));
-                        return new UIntConstant(ec.BuiltinTypes, res, left.Location);
-                    }
-                    else if (left is IntConstant)
-                    {
-                        int res = (int)Math.Round(Math.Pow(((IntConstant)left).Value, ((IntConstant)right).Value));
-                        return new IntConstant(ec.BuiltinTypes, res, left.Location);
-                    }
                     else if (left is DecimalConstant)
                     {
                         decimal res = (decimal)Math.Pow((double)((DecimalConstant)left).Value, (double)((DecimalConstant)right).Value);
                         return new DecimalConstant(ec.BuiltinTypes, res, left.Location);
+                    }
+                    else if (left is ULongConstant)
+                    {
+                        ulong res = IntegerPow(((ULongConstant)left).Value, ((ULongConstant)right).Value);
+                        return new ULongConstant(ec.BuiltinTypes, res, left.Location);
+                    }
+                    else if (left is LongConstant)
+                    {
+                        long res = IntegerPow(((LongConstant)left).Value, ((LongConstant)right).Value);
+                        return new LongConstant(ec.BuiltinTypes, res, left.Location);
+                    }
+                    else if (left is UIntConstant)
+                    {
+                        uint res = (uint)IntegerPow(((UIntConstant)left).Value, ((UIntConstant)right).Value);
+                        return new UIntConstant(ec.BuiltinTypes, res, left.Location);
+                    }
+                    else if (left is IntConstant)
+                    {
+                        int res = (int)IntegerPow(((IntConstant)left).Value, ((IntConstant)right).Value);
+                        return new IntConstant(ec.BuiltinTypes, res, left.Location);
                     }
                     else
                     {
@@ -1234,5 +1234,66 @@ namespace Mono.CSharp {
 
 			return null;
 		}
+
+        private static ulong IntegerPow(ulong @base, ulong exp)
+        {
+            if (exp == 0)
+            {
+              if (@base == 0)
+                throw new NotFiniteNumberException();
+              return 1;
+            }
+
+            ulong result = 1;
+            while (true)
+            {
+              if ((exp & 1) != 0)
+              {
+                result *= @base;
+                exp--;
+              }
+              if (exp == 0)
+                break;
+              @base *= @base;
+              exp >>= 1;
+            }
+
+            return result;
+        }
+
+        private static long IntegerPow(long @base, long exp)
+        {
+            if (exp < 0)
+            {
+                if (@base == 0)
+                    throw new DivideByZeroException();
+                if (exp == -1 && (@base == 1 || @base == -1))
+                    return @base;
+                return 0;
+            }
+
+            if (exp == 0)
+            {
+                if (@base == 0)
+                    throw new NotFiniteNumberException();
+                return 1;
+            }
+
+            long result = 1;
+            while (true)
+            {
+                if ((exp & 1) != 0)
+                {
+                    result *= @base;
+                    exp--;
+                }
+                if (exp == 0)
+                    break;
+                @base *= @base;
+                exp >>= 1;
+            }
+
+            return result;
+        }
 	}
 }
