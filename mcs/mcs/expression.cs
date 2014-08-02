@@ -5151,7 +5151,32 @@ namespace Mono.CSharp
 				break;
             case Operator.Power:
                 method_name = "Power";
-                break;
+                //TODO: handle implicit conversions from user types to built-in
+                if (left.Type.BuiltinType == BuiltinTypeSpec.Type.None || right.Type.BuiltinType == BuiltinTypeSpec.Type.None)
+                    break;
+                Func<Expression, TypeSpec, Location, Expression> convertExpression = (e, t, l) =>
+                {
+                    var arguments = new Arguments(2);
+                    arguments.Add(new Argument(e));
+                    arguments.Add(new Argument(new TypeOf(t, l)));
+                    return CreateExpressionFactoryCall(ec, "Convert", arguments);
+                };
+                var leftEx = left.CreateExpressionTree(ec);
+                if (left.Type != ec.BuiltinTypes.Double)
+                    leftEx = convertExpression(leftEx, ec.BuiltinTypes.Double, left.Location);
+                var rightEx = right.CreateExpressionTree(ec);
+                if (right.Type != ec.BuiltinTypes.Double)
+                    rightEx = convertExpression(rightEx, ec.BuiltinTypes.Double, left.Location);
+                Arguments powArgs = new Arguments(2);
+                powArgs.Add(new Argument(leftEx));
+                powArgs.Add(new Argument(rightEx));
+                var powCall = CreateExpressionFactoryCall(ec, method_name, powArgs);
+                BuiltinTypeSpec.Type targetType;
+                for (targetType = BuiltinTypeSpec.Type.Decimal; (int)targetType > (int)BuiltinTypeSpec.Type.Int
+                    && left.Type.BuiltinType != targetType && right.Type.BuiltinType != targetType; targetType--) { }
+                if (targetType != BuiltinTypeSpec.Type.Double)
+                    powCall = convertExpression(powCall, ec.BuiltinTypes.AllTypes.Single(t => t.BuiltinType == targetType), Location);
+                return powCall;
             case Operator.RightShift:
 				method_name = "RightShift";
 				break;
@@ -5183,8 +5208,7 @@ namespace Mono.CSharp
 		{
 			return visitor.Visit (this);
 		}
-
-	}
+    }
 	
 	//
 	// Represents the operation a + b [+ c [+ d [+ ...]]], where a is a string
